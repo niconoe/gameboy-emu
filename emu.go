@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"github.com/niconoe/gameboy-emu/cpu"
+	"fmt"
+)
 
 func main() {
-    fmt.Println("Hello, 世!界")
+    var cpu cpu.GameboyCPU
+
+	fmt.Println("Niconoe's expermiental Gameboy emulator...")
 }
