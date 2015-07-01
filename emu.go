@@ -1,12 +1,17 @@
 package main
 
 import (
-	"github.com/niconoe/gameboy-emu/cpu"
 	"fmt"
+	"github.com/niconoe/gameboy-emu/cpu"
+	"github.com/niconoe/gameboy-emu/memory"
 )
 
 func main() {
-    var cpu cpu.GameboyCPU
+	var cpu cpu.GameboyCPU
+	var mmu = memory.MakeMmu()
 
 	fmt.Println("Niconoe's expermiental Gameboy emulator...")
+
+	cpu.AttachMmu(&mmu)
+	cpu.Reset()
 }
