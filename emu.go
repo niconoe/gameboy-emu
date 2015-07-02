@@ -10,7 +10,7 @@ func main() {
 	var cpu cpu.GameboyCPU
 	var mmu = memory.MakeMmu()
 
-	fmt.Println("Niconoe's expermiental Gameboy emulator...")
+	fmt.Println("Niconoe's experimental Gameboy emulator...")
 
 	cpu.AttachMmu(&mmu)
 	cpu.Reset()

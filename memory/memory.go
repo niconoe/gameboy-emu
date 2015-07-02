@@ -11,7 +11,6 @@ func MakeMmu() Mmu {
     mmu := Mmu{}
 
     // We have to load/initialize the BIOS data:
-
     // TODO: get rid of this absolute path !!!
     data, err := ioutil.ReadFile("/Users/nicolasnoe/Dropbox/go/src/github.com/niconoe/gameboy-emu/memory/bios.bin")
     if err != nil {
@@ -19,7 +18,9 @@ func MakeMmu() Mmu {
         panic(err)
     }
 
-    mmu.bios_data = data
+    // At initialization time, the BIOS is mapped
+    mmu.biosIsMapped = true
+    mmu.biosData = data
 
     return mmu
 }
@@ -28,10 +29,22 @@ func MakeMmu() Mmu {
 // Mmu should not be instanciated directly.
 // It should be instead instanciated with the MakeMmu() method
 type Mmu struct {
-    bios_data []byte
+    biosData []byte
+    romBank0 [16384]byte   
+
+    biosIsMapped    bool
 }
 
-func (Mmu) readByte(addr types.MemoryAddress) byte {
+func (mmu Mmu) readByte(addr types.MemoryAddress) byte {
+    if addr <= 0x3fff { // Rom Bank 0
+        if addr <=0x00ff && mmu.biosIsMapped {
+                // If BIOS is mapped, it shadows the cartridge ROM
+                return mmu.biosData[addr]
+            } else {
+                return mmu.romBank0[addr]
+            }
+    }
+
 	return 0x00
 }
 
