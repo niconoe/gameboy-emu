@@ -5,13 +5,14 @@ import (
 	"github.com/niconoe/gameboy-emu/types"
 
 	"fmt"
-	"time"
+	//"time"
 )
 
 type clock struct {
 	m uint64 // Machine cycles
 	t uint64 // Clock cycles
 }
+
 
 type GameboyCPU struct {
 	// Registers
@@ -51,7 +52,7 @@ func (cpu GameboyCPU) Run(){
 		
 		
 		// For debugging purposes...
-		time.Sleep(100 * time.Millisecond)	
+		//time.Sleep(100 * time.Millisecond)	
 	}
 }
 
@@ -83,6 +84,10 @@ func (cpu* GameboyCPU) dispatch(opcode byte) {
 		cpu.nop()
 	case 0x01:
 		cpu.ldBCd16()
+	case 0x0c:
+		cpu.incC()
+	case 0x0e:
+		cpu.ldCd8()
 	
 	case 0x20:
 		cpu.jrNzR8()
@@ -93,11 +98,25 @@ func (cpu* GameboyCPU) dispatch(opcode byte) {
 	case 0x31:
 		cpu.ldSPd16()
 	case 0x32:
-		cpu.ldHL_A()
+		cpu.LDParHL_ParA()
+
+	case 0x3e:
+		cpu.ldAd8()
+
+	case 0x77:
+		cpu.ldParHLParA()
 	
-	case 0xAF:
+	case 0xaf:
 		cpu.xorA()
+
+	case 0xe0:
+		cpu.LDHPara8ParA()
+
+	case 0xe2:
+		cpu.ldParCParA()
 	
+	default:
+		panic(fmt.Sprintf("Opcode not found: %.2x", opcode))
 	}
 }
 
@@ -107,7 +126,11 @@ func (cpu* GameboyCPU) dispatchExtended(secondByteOfOpcode byte){
 	switch secondByteOfOpcode {
 	case 0x7c:
 		cpu.bit7H()
+	default:
+		//panic("Extended instructions: opcode not found: " + secondByteOfOpcode)
 	}
+
+
 }
 
 // Instructions
@@ -138,7 +161,7 @@ func (cpu* GameboyCPU) ldSPd16(){
 	cpu.pc += 3
 }
 
-func (cpu* GameboyCPU) ldHL_A(){
+func (cpu* GameboyCPU) LDParHL_ParA(){
 	// Put A into memory address HL. Decrement HL.
 	// Known as: LD (HL-),A
 	// Known as: LD (HLD),A or LDD (HL),A
@@ -147,6 +170,16 @@ func (cpu* GameboyCPU) ldHL_A(){
 
 	// Decrement HL
 	cpu.decHL() 
+
+	cpu.lastInstructionClock.m = 2
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 1
+}
+
+func (cpu* GameboyCPU) ldParHLParA(){
+	dest := types.MemoryAddress(cpu.getHL())
+	cpu.mmu.WriteByte(dest, cpu.a)
 
 	cpu.lastInstructionClock.m = 2
 	cpu.lastInstructionClock.t = 8
@@ -204,6 +237,75 @@ func (cpu* GameboyCPU) jrNzR8(){
 	
 }
 
+func (cpu* GameboyCPU) ldCd8(){
+	cpu.c = cpu.mmu.ReadByte(cpu.pc+1)
+
+	cpu.lastInstructionClock.m = 2
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 2
+}
+
+func (cpu* GameboyCPU) ldAd8(){
+	cpu.a = cpu.mmu.ReadByte(cpu.pc+1)
+
+	cpu.lastInstructionClock.m = 2
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 2
+}
+
+func (cpu* GameboyCPU) ldParCParA(){
+	// Put A into address $FF00 + register C.
+	// Also known as LD (C),A and LD ($FF00+C),A
+
+	dest := types.MakeMemoryMappedIOAddress()
+	dest = dest.AddUnsignedOffset(cpu.c)
+	cpu.mmu.WriteByte(dest, cpu.a)
+
+	cpu.lastInstructionClock.m = 2
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 1
+}
+
+func (cpu* GameboyCPU) LDHPara8ParA(){
+	//Put A into memory address $FF00+n.
+	dest := types.MakeMemoryMappedIOAddress()
+	dest = dest.AddUnsignedOffset(cpu.mmu.ReadByte(cpu.pc+1))
+	cpu.mmu.WriteByte(dest, cpu.a)
+
+	cpu.lastInstructionClock.m = 3
+	cpu.lastInstructionClock.t = 12
+
+	cpu.pc += 2
+}
+
+func (cpu * GameboyCPU) incC(){
+	previousVal := cpu.c
+	newVal := cpu.c + 1
+
+	cpu.c = newVal
+	
+	if cpu.c == 0{
+		cpu.setZeroFlag()
+	} else {
+		cpu.clearZeroFlag()
+	}
+
+	cpu.clearSubstractFlag()
+
+	if (newVal^0x01^previousVal)&0x10 == 0x10 {
+		cpu.setHalfCarryFlag()
+	} else {
+		cpu.clearHalfCarryFlag()
+	}
+
+	cpu.lastInstructionClock.m = 1
+	cpu.lastInstructionClock.t = 4
+
+	cpu.pc += 1
+}
 
 // Instruction helpers to manipulate the flags register
 func (cpu* GameboyCPU) hasZeroFlag() bool{
@@ -224,6 +326,10 @@ func (cpu* GameboyCPU) clearSubstractFlag(){
 
 func (cpu* GameboyCPU) setHalfCarryFlag(){
 	cpu.f = setBit(cpu.f, 5)
+}
+
+func (cpu* GameboyCPU) clearHalfCarryFlag(){
+	cpu.f = clearBit(cpu.f, 5)
 }
 
 // Instruction helpers to manipulate 8-bit registers as pairs
