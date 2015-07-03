@@ -14,4 +14,5 @@ func main() {
 
 	cpu.AttachMmu(&mmu)
 	cpu.Reset()
+    cpu.Run()
 }

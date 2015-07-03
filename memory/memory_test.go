@@ -16,12 +16,12 @@ func TestBiosAccess(t *testing.T){
     // (It shadows ROM bank 0, and is therefore removed later)
     mmu := MakeMmu()
 
-    firstBiosByte := mmu.readByte(0x00)
+    firstBiosByte := mmu.ReadByte(0x00)
     checkEqualBytes(firstBiosByte, 0x31, t)
 
-    fifthBiosByte := mmu.readByte(0x04)
+    fifthBiosByte := mmu.ReadByte(0x04)
     checkEqualBytes(fifthBiosByte, 0x21, t)
 
-    lastBiosByte := mmu.readByte(0xff)
+    lastBiosByte := mmu.ReadByte(0xff)
     checkEqualBytes(lastBiosByte, 0x50, t)
 }

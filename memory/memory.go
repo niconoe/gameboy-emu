@@ -3,6 +3,8 @@ package memory
 import (
 	"github.com/niconoe/gameboy-emu/types"
     "io/ioutil"
+
+    "fmt"
 )
 
 
@@ -35,7 +37,7 @@ type Mmu struct {
     biosIsMapped    bool
 }
 
-func (mmu Mmu) readByte(addr types.MemoryAddress) byte {
+func (mmu Mmu) ReadByte(addr types.MemoryAddress) byte {
     if addr <= 0x3fff { // Rom Bank 0
         if addr <=0x00ff && mmu.biosIsMapped {
                 // If BIOS is mapped, it shadows the cartridge ROM
@@ -44,18 +46,22 @@ func (mmu Mmu) readByte(addr types.MemoryAddress) byte {
                 return mmu.romBank0[addr]
             }
     }
-
-	return 0x00
+    return 0x00
 }
 
-func (Mmu) readWord(addr types.MemoryAddress) types.Word {
-	return 0xffff
+func (mmu Mmu) ReadWord(addr types.MemoryAddress) types.Word {
+	b1 := mmu.ReadByte(addr)
+    b2 := mmu.ReadByte(addr+1)
+
+    return types.WordFromBytes(b1, b2)
 }
 
-func (Mmu) writeByte(addr types.MemoryAddress, val byte) {
-
+func (Mmu) WriteByte(addr types.MemoryAddress, val byte) {
+    if addr >= 0x8000 && addr <= 0x9fff {
+        fmt.Printf("Write value %.2x to VRAM!\n", val)
+    }
 }
 
-func (Mmu) writeWord(addr types.MemoryAddress, val types.Word) {
+func (Mmu) WriteWord(addr types.MemoryAddress, val types.Word) {
 
 }
