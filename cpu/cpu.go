@@ -31,22 +31,27 @@ func (cpu GameboyCPU) String() string {
 		"H: 0x%.2x      L: 0x%.2x \n"+
 		"\n"+
 		"PC: 0x%.4x\n"+
-		"SP: 0x%.4x", cpu.a, cpu.f, cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.pc, cpu.sp)
+		"SP: 0x%.4x\n"+
+		"--------------------------\n", cpu.a, cpu.f, cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.pc, cpu.sp)
 }
 
 // This function will need a Mmu attached
 func (cpu GameboyCPU) Run() {
+	cpu.Reset()
+
 	for {
-		fmt.Println(cpu)
+		//fmt.Println(cpu)
 
 		// Get the opcode of the next instruction
-		opcode := cpu.mmu.ReadByte(cpu.pc)
-		if opcode != 0xcb {
-			cpu.dispatch(opcode)
-		} else {
-			// This is an extended instruction, we pass the second part of the opcode
-			cpu.dispatchExtended(cpu.mmu.ReadByte(cpu.pc + 1))
+		opcode, extended_opcode := cpu.FetchNextOpcode()
+
+		/*fmt.Printf("\nOpcode: %.2x", opcode)
+		if opcode == 0xcb {
+			fmt.Printf(" -- Extended opcode: %.2x", extended_opcode)
 		}
+		fmt.Printf("\n")*/
+		cpu.Execute(opcode, extended_opcode)
+		
 
 		// For debugging purposes...
 		//time.Sleep(100 * time.Millisecond)
@@ -73,6 +78,27 @@ func (cpu *GameboyCPU) Reset() {
 	cpu.lastInstructionClock.t = 0
 }
 
+func (cpu *GameboyCPU) Execute(opcode, extended_opcode byte){
+	if opcode != 0xcb {
+		cpu.dispatch(opcode)
+	} else {
+		// This is an extended instruction, we pass the second part of the opcode
+		cpu.dispatchExtended(extended_opcode)
+	}
+
+}
+
+// If normal instruction, only the first byte is significant and the second one should be ignored
+// If extended instruction, both bytes are returned
+func (cpu *GameboyCPU) FetchNextOpcode() (first, second byte){
+	opcode := cpu.mmu.ReadByte(cpu.pc)
+	if opcode == 0xcb {
+		return 0xcb, cpu.mmu.ReadByte(cpu.pc + 1)
+	} else {
+		return opcode, 0x00
+	}
+}
+
 func (cpu *GameboyCPU) dispatch(opcode byte) {
 	// When we enter here, PC is always pointing right before the current instruction
 	switch opcode {
@@ -84,6 +110,12 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.incC()
 	case 0x0e:
 		cpu.ldCd8()
+
+	case 0x11:
+		cpu.ldDEd16()
+
+	case 0x1a:
+		cpu.ldAParDEPar()
 
 	case 0x20:
 		cpu.jrNzR8()
@@ -177,6 +209,15 @@ func (cpu *GameboyCPU) ldParHLParA() {
 	cpu.pc += 1
 }
 
+func (cpu *GameboyCPU) ldDEd16() {
+	w := cpu.mmu.ReadWord(cpu.pc + 1)
+	cpu.setDE(w)
+
+	cpu.lastInstructionClock.t = 12
+
+	cpu.pc += 3
+}
+
 func (cpu *GameboyCPU) ldHLd16() {
 	w := cpu.mmu.ReadWord(cpu.pc + 1)
 	cpu.setHL(w)
@@ -189,6 +230,7 @@ func (cpu *GameboyCPU) ldHLd16() {
 func (cpu *GameboyCPU) xorA() {
 	// Xor A, with itself, effectively setting it to zero
 	cpu.a = 0
+	cpu.setZeroFlag()
 
 	cpu.lastInstructionClock.t = 4
 
@@ -203,6 +245,7 @@ func (cpu *GameboyCPU) bit7H() {
 	}
 
 	cpu.clearSubstractFlag()
+	cpu.setHalfCarryFlag()
 
 	cpu.lastInstructionClock.t = 8
 
@@ -287,6 +330,16 @@ func (cpu *GameboyCPU) incC() {
 	cpu.pc += 1
 }
 
+func (cpu *GameboyCPU) ldAParDEPar() {
+	source := types.MemoryAddress(cpu.getDE())
+
+	cpu.a = cpu.mmu.ReadByte(source)
+
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 1
+}
+
 // Instruction helpers to manipulate the flags register
 func (cpu *GameboyCPU) hasZeroFlag() bool {
 	return hasBit(cpu.f, 7)
@@ -317,8 +370,16 @@ func (cpu GameboyCPU) getHL() types.Word {
 	return types.WordFromBytes(cpu.l, cpu.h) // !WordFrom bytes expect little endian!
 }
 
+func (cpu GameboyCPU) getDE() types.Word {
+	return types.WordFromBytes(cpu.d, cpu.e)
+}
+
 func (cpu *GameboyCPU) setHL(w types.Word) {
 	cpu.h, cpu.l = w.ToBytes()
+}
+
+func (cpu *GameboyCPU) setDE(w types.Word){
+	cpu.d, cpu.e = w.ToBytes()
 }
 
 func (cpu *GameboyCPU) decHL() {

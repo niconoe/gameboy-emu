@@ -57,8 +57,14 @@ func (mmu Mmu) ReadWord(addr types.MemoryAddress) types.Word {
 }
 
 func (Mmu) WriteByte(addr types.MemoryAddress, val byte) {
+    fmt.Printf("Write byte %.2x to Address: %x", val, addr)
+
     if addr >= 0x8000 && addr <= 0x9fff {
-        fmt.Printf("Write value %.2x to VRAM!\n", val)
+        fmt.Printf(" (It's VRAM!) \n")
+    }
+
+    if addr >= 0xff00 && addr <= 0xff7f {
+        fmt.Printf(" (It's Memory-mapped IO!) \n")
     }
 }
 
