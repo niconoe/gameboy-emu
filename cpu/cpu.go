@@ -51,7 +51,6 @@ func (cpu GameboyCPU) Run() {
 		}
 		fmt.Printf("\n")*/
 		cpu.Execute(opcode, extended_opcode)
-		
 
 		// For debugging purposes...
 		//time.Sleep(100 * time.Millisecond)
@@ -78,7 +77,7 @@ func (cpu *GameboyCPU) Reset() {
 	cpu.lastInstructionClock.t = 0
 }
 
-func (cpu *GameboyCPU) Execute(opcode, extended_opcode byte){
+func (cpu *GameboyCPU) Execute(opcode, extended_opcode byte) {
 	if opcode != 0xcb {
 		cpu.dispatch(opcode)
 	} else {
@@ -90,7 +89,7 @@ func (cpu *GameboyCPU) Execute(opcode, extended_opcode byte){
 
 // If normal instruction, only the first byte is significant and the second one should be ignored
 // If extended instruction, both bytes are returned
-func (cpu *GameboyCPU) FetchNextOpcode() (first, second byte){
+func (cpu *GameboyCPU) FetchNextOpcode() (first, second byte) {
 	opcode := cpu.mmu.ReadByte(cpu.pc)
 	if opcode == 0xcb {
 		return 0xcb, cpu.mmu.ReadByte(cpu.pc + 1)
@@ -378,7 +377,7 @@ func (cpu *GameboyCPU) setHL(w types.Word) {
 	cpu.h, cpu.l = w.ToBytes()
 }
 
-func (cpu *GameboyCPU) setDE(w types.Word){
+func (cpu *GameboyCPU) setDE(w types.Word) {
 	cpu.d, cpu.e = w.ToBytes()
 }
 

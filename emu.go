@@ -13,5 +13,5 @@ func main() {
 	fmt.Println("Niconoe's experimental Gameboy emulator...")
 
 	cpu.AttachMmu(&mmu)
-    cpu.Run()
+	cpu.Run()
 }
