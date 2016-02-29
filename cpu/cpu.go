@@ -25,14 +25,14 @@ type GameboyCPU struct {
 
 func (cpu GameboyCPU) String() string {
 	return fmt.Sprintf("--------------------------\n"+
-		"A: 0x%.2x      F: 0x%.2x \n"+
-		"B: 0x%.2x      C: 0x%.2x \n"+
-		"D: 0x%.2x      E: 0x%.2x \n"+
-		"H: 0x%.2x      L: 0x%.2x \n"+
+		"AF: 0x%.2x%.2x \n"+
+		"BC: 0x%.2x%.2x \n"+
+		"DE: 0x%.2x%.2x \n"+
+		"HL: 0x%.2x%.2x \n"+
 		"\n"+
-		"PC: 0x%.4x\n"+
 		"SP: 0x%.4x\n"+
-		"--------------------------\n", cpu.a, cpu.f, cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.pc, cpu.sp)
+		"PC: 0x%.4x\n"+
+		"--------------------------\n", cpu.a, cpu.f, cpu.b, cpu.c, cpu.d, cpu.e, cpu.h, cpu.l, cpu.sp, cpu.pc)
 }
 
 // This function will need a Mmu attached
