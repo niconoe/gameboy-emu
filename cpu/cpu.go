@@ -104,43 +104,42 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.nop()
 	case 0x01:
 		cpu.ldBCd16()
+	case 0x06:
+		cpu.ldBd8()
 	case 0x0c:
 		cpu.incC()
 	case 0x0e:
 		cpu.ldCd8()
-
 	case 0x11:
 		cpu.ldDEd16()
-
+	case 0x17:
+		cpu.rlA()
 	case 0x1a:
 		cpu.ldAParDEPar()
-
 	case 0x20:
 		cpu.jrNzR8()
-
 	case 0x21:
 		cpu.ldHLd16()
-
 	case 0x31:
 		cpu.ldSPd16()
 	case 0x32:
 		cpu.LDParHL_ParA()
-
 	case 0x3e:
 		cpu.ldAd8()
-
+	case 0x4f:
+		cpu.ldCA()
 	case 0x77:
 		cpu.ldParHLParA()
-
 	case 0xaf:
 		cpu.xorA()
-
+	case 0xc1:
+		cpu.popBC()
+	case 0xc5:
+		cpu.pushBC()
 	case 0xcd:
 		cpu.callA16()
-
 	case 0xe0:
 		cpu.LDHPara8ParA()
-
 	case 0xe2:
 		cpu.ldParCParA()
 
@@ -153,15 +152,54 @@ func (cpu *GameboyCPU) dispatchExtended(secondByteOfOpcode byte) {
 	// We receive only the second byte of the opcode, but like for the normal dispatch,
 	// PC is till pointing before the whole (2 bytes) instruction
 	switch secondByteOfOpcode {
+	case 0x11:
+		cpu.rl_C()
 	case 0x7c:
 		cpu.bit7H()
 	default:
-		//panic("Extended instructions: opcode not found: " + secondByteOfOpcode)
+		panic(fmt.Sprintf("EXTENDED Opcode not found: %.2x. CPU state: %s", secondByteOfOpcode, cpu))
 	}
 
 }
 
 // Instructions
+func (cpu *GameboyCPU) rlA() {
+	cpu.a = cpu.rlN(cpu.a)
+
+	cpu.lastInstructionClock.t = 4
+ 	cpu.pc += 1
+}
+
+func (cpu *GameboyCPU) rl_C() {
+	cpu.c = cpu.rlN(cpu.c)
+
+	cpu.lastInstructionClock.t = 8
+ 	cpu.pc += 2
+}
+
+func (cpu *GameboyCPU) popBC() {
+	cpu.setBC(cpu.popWordFromStack())
+
+	cpu.lastInstructionClock.t = 12
+	cpu.pc += 1
+
+	_ = "breakpoint"
+}
+
+func (cpu *GameboyCPU) pushBC() {
+	cpu.pushWordOnStack(cpu.getBC())
+
+	cpu.lastInstructionClock.t = 16
+	cpu.pc += 1
+}
+
+func (cpu *GameboyCPU) ldCA() {
+	cpu.c = cpu.a
+
+	cpu.lastInstructionClock.t = 4
+	cpu.pc += 1
+}
+
 // Each instruction manipulates PC appropriately
 func (cpu *GameboyCPU) callA16() {
 	// CALL nn
@@ -278,6 +316,14 @@ func (cpu *GameboyCPU) jrNzR8() {
 
 }
 
+func (cpu *GameboyCPU) ldBd8() {
+	cpu.b = cpu.mmu.ReadByte(cpu.pc + 1)
+
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 2
+}
+
 func (cpu *GameboyCPU) ldCd8() {
 	cpu.c = cpu.mmu.ReadByte(cpu.pc + 1)
 
@@ -355,6 +401,57 @@ func (cpu *GameboyCPU) ldAParDEPar() {
 
 
 // Helpers
+
+func (cpu *GameboyCPU) rlN(register byte) byte {
+	// Helper for the various "rotate left through carry (8-bit)" instructions
+	// Sets the flag and return new register value.
+
+	// assigning new value to register, updating the clock and PC is the caller responsability.
+
+	// Rotate n left through Carry flag.
+	// Flags affected:
+ 	//  Z - Set if result is zero.
+ 	//  N - Reset.
+ 	//  H - Reset.
+ 	//  C - Contains old bit 7 data.
+
+ 	bit7_was_set := false
+ 	if hasBit(register, 7){
+ 		bit7_was_set = true
+ 	}
+
+ 	register = register << 1
+
+ 	if cpu.hasCarryFlag() { 
+ 		register ^= 0x01
+ 	}
+
+ 	if bit7_was_set {
+ 		cpu.setCarryFlag()
+ 	} else {
+ 		cpu.clearCarryFlag()
+ 	}
+
+ 	if register == 0 {
+ 		cpu.setZeroFlag()
+ 	} else {
+ 		cpu.clearZeroFlag()
+ 	}
+
+ 	cpu.clearSubstractFlag()
+ 	cpu.clearHalfCarryFlag()
+
+ 	return register
+}
+
+func (cpu *GameboyCPU) popWordFromStack() types.Word {
+  // Push the given word on the stack and update SP
+  w := cpu.mmu.ReadWord(cpu.sp)
+  cpu.sp += 2
+
+  return w
+}
+
 func (cpu *GameboyCPU) pushWordOnStack(w types.Word) {
 	// Push the given word on the stack and update SP
 	cpu.mmu.WriteWord(cpu.sp, w)
@@ -386,6 +483,18 @@ func (cpu *GameboyCPU) clearHalfCarryFlag() {
 	cpu.f = clearBit(cpu.f, 5)
 }
 
+func (cpu GameboyCPU) hasCarryFlag() bool {
+	return hasBit(cpu.f, 4)
+}
+
+func (cpu *GameboyCPU) setCarryFlag() {
+	cpu.f = setBit(cpu.f, 4)
+}
+
+func (cpu *GameboyCPU) clearCarryFlag() {
+	cpu.f = clearBit(cpu.f, 4)
+}
+
 // Instruction helpers to manipulate 8-bit registers as pairs
 func (cpu GameboyCPU) getHL() types.Word {
 	return types.WordFromBytes(cpu.l, cpu.h) // !WordFrom bytes expect little endian!
@@ -393,6 +502,10 @@ func (cpu GameboyCPU) getHL() types.Word {
 
 func (cpu GameboyCPU) getDE() types.Word {
 	return types.WordFromBytes(cpu.e, cpu.d) // !WordFrom bytes expect little endian!
+}
+
+func (cpu GameboyCPU) getBC() types.Word {
+	return types.WordFromBytes(cpu.c, cpu.b) // !WordFrom bytes expect little endian!
 }
 
 func (cpu *GameboyCPU) setHL(w types.Word) {
