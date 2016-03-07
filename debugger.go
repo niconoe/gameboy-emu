@@ -30,6 +30,11 @@ func main() {
 			fmt.Printf("\n")
 
 			cpu.Execute(opcode, extended_opcode)
+		case "r", "run":
+			for {
+				opcode, extended_opcode := cpu.FetchNextOpcode()
+				cpu.Execute(opcode, extended_opcode)
+			}
 
 		case "s", "show":
 			// Show important state (CPU, ...)

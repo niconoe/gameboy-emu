@@ -1,11 +1,17 @@
 package memory
 
 import (
+	"fmt"
 	"github.com/niconoe/gameboy-emu/types"
 	"io/ioutil"
-
-	"fmt"
+	"os"
 )
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
 
 // This method should be called to create a Mmu, it ensures it is set up correctly
 func MakeMmu() Mmu {
@@ -14,10 +20,7 @@ func MakeMmu() Mmu {
 	// We have to load/initialize the BIOS data:
 	// TODO: get rid of this absolute path !!!
 	data, err := ioutil.ReadFile("/Users/nicolasnoe/Dropbox/go/src/github.com/niconoe/gameboy-emu/memory/bios.bin")
-	if err != nil {
-		// TODO: look how to use panic to display proper error message
-		panic(err)
-	}
+	check(err)
 
 	// At initialization time, the BIOS is mapped
 	mmu.biosIsMapped = true
@@ -29,10 +32,26 @@ func MakeMmu() Mmu {
 // Mmu should not be instanciated directly.
 // It should be instead instanciated with the MakeMmu() method
 type Mmu struct {
-	biosData []byte
-	romBank0 [16384]byte
+	biosData     []byte
+	romBank0     [16384]byte
+	otherRomBank [16384]byte
 
 	biosIsMapped bool
+}
+
+func (mmu *Mmu) LoadRom(romPath string) {
+	rom, err := os.Open(romPath)
+	check(err)
+	defer rom.Close()
+
+	// TODO: Throw error message is ROM type is not supported
+	// (ROM largers than 32kb?)
+
+	// Bank 0 of ROM is always available at 0000-3fff
+	rom.Read(mmu.romBank0[:])
+
+	// We currently only support 32k ROMS (without MBC chips), so Bank 1 is directly mapped at 4000-7fff
+	rom.ReadAt(mmu.otherRomBank[:], 16384)
 }
 
 func (mmu Mmu) ReadByte(addr types.MemoryAddress) byte {

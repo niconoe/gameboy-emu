@@ -5,7 +5,6 @@ import (
 	"github.com/niconoe/gameboy-emu/types"
 
 	"fmt"
-	//"time"
 )
 
 type clock struct {
@@ -136,6 +135,9 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 	case 0xaf:
 		cpu.xorA()
 
+	case 0xcd:
+		cpu.callA16()
+
 	case 0xe0:
 		cpu.LDHPara8ParA()
 
@@ -143,7 +145,7 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.ldParCParA()
 
 	default:
-		panic(fmt.Sprintf("Opcode not found: %.2x", opcode))
+		panic(fmt.Sprintf("Opcode not found: %.2x. CPU state: %s", opcode, cpu))
 	}
 }
 
@@ -161,6 +163,18 @@ func (cpu *GameboyCPU) dispatchExtended(secondByteOfOpcode byte) {
 
 // Instructions
 // Each instruction manipulates PC appropriately
+func (cpu *GameboyCPU) callA16() {
+	// CALL nn
+	// Description: Push address of next instruction onto stack and then jump to address nn.
+	// Use with: two byte immediate value (LS byte first).
+	// Cycles: 12
+	cpu.lastInstructionClock.t = 12
+	
+	cpu.pushWordOnStack(types.Word(cpu.pc) + 3)
+	cpu.pc = types.MemoryAddress(cpu.mmu.ReadWord(cpu.pc + 1))
+	// TODO: untested instruction
+}
+
 func (cpu *GameboyCPU) nop() {
 	cpu.lastInstructionClock.t = 4
 
@@ -339,6 +353,14 @@ func (cpu *GameboyCPU) ldAParDEPar() {
 	cpu.pc += 1
 }
 
+
+// Helpers
+func (cpu *GameboyCPU) pushWordOnStack(w types.Word) {
+	// Push the given word on the stack and update SP
+	cpu.mmu.WriteWord(cpu.sp, w)
+	cpu.sp -= 2
+}
+
 // Instruction helpers to manipulate the flags register
 func (cpu *GameboyCPU) hasZeroFlag() bool {
 	return hasBit(cpu.f, 7)
@@ -370,7 +392,7 @@ func (cpu GameboyCPU) getHL() types.Word {
 }
 
 func (cpu GameboyCPU) getDE() types.Word {
-	return types.WordFromBytes(cpu.d, cpu.e)
+	return types.WordFromBytes(cpu.e, cpu.d) // !WordFrom bytes expect little endian!
 }
 
 func (cpu *GameboyCPU) setHL(w types.Word) {
