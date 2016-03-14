@@ -104,6 +104,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.nop()
 	case 0x01:
 		cpu.ldBCd16()
+	case 0x05:
+		cpu.decB()
 	case 0x06:
 		cpu.ldBd8()
 	case 0x0c:
@@ -112,12 +114,18 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.ldCd8()
 	case 0x11:
 		cpu.ldDEd16()
+	case 0x13:
+		cpu.incDE()
 	case 0x17:
 		cpu.rlA()
 	case 0x1a:
 		cpu.ldAParDEPar()
 	case 0x20:
 		cpu.jrNzR8()
+	case 0x22:
+		cpu.ldParHLPlusParA()
+	case 0x23:
+		cpu.incHL()
 	case 0x21:
 		cpu.ldHLd16()
 	case 0x31:
@@ -128,6 +136,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.ldAd8()
 	case 0x4f:
 		cpu.ldCA()
+	case 0x7b:
+		cpu.ldAE()
 	case 0x77:
 		cpu.ldParHLParA()
 	case 0xaf:
@@ -136,6 +146,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.popBC()
 	case 0xc5:
 		cpu.pushBC()
+	case 0xc9:
+		cpu.ret()
 	case 0xcd:
 		cpu.callA16()
 	case 0xe0:
@@ -163,6 +175,13 @@ func (cpu *GameboyCPU) dispatchExtended(secondByteOfOpcode byte) {
 }
 
 // Instructions
+func (cpu *GameboyCPU) ldAE() {
+	cpu.a = cpu.e
+
+	cpu.lastInstructionClock.t = 4
+ 	cpu.pc += 1
+}
+
 func (cpu *GameboyCPU) rlA() {
 	cpu.a = cpu.rlN(cpu.a)
 
@@ -182,8 +201,6 @@ func (cpu *GameboyCPU) popBC() {
 
 	cpu.lastInstructionClock.t = 12
 	cpu.pc += 1
-
-	_ = "breakpoint"
 }
 
 func (cpu *GameboyCPU) pushBC() {
@@ -198,6 +215,13 @@ func (cpu *GameboyCPU) ldCA() {
 
 	cpu.lastInstructionClock.t = 4
 	cpu.pc += 1
+}
+
+func (cpu *GameboyCPU) ret() {
+	cpu.pc = types.MemoryAddress(cpu.popWordFromStack())
+
+	cpu.lastInstructionClock.t = 8
+	_ = "breakpoint"
 }
 
 // Each instruction manipulates PC appropriately
@@ -234,6 +258,19 @@ func (cpu *GameboyCPU) ldSPd16() {
 	cpu.lastInstructionClock.t = 12
 
 	cpu.pc += 3
+}
+
+func (cpu *GameboyCPU) ldParHLPlusParA() {
+	// Put A into memory address HL. Increment HL.
+	// Same as: LD (HL),A - INC HL
+	dest := types.MemoryAddress(cpu.getHL())
+	cpu.mmu.WriteByte(dest, cpu.a)
+
+	cpu.incHL_helper()
+
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 1
 }
 
 func (cpu *GameboyCPU) LDParHL_ParA() {
@@ -313,7 +350,6 @@ func (cpu *GameboyCPU) jrNzR8() {
 	} else {
 		cpu.lastInstructionClock.t = 8
 	}
-
 }
 
 func (cpu *GameboyCPU) ldBd8() {
@@ -364,6 +400,24 @@ func (cpu *GameboyCPU) LDHPara8ParA() {
 	cpu.pc += 2
 }
 
+func (cpu *GameboyCPU) decB() {
+	cpu.b = cpu.decN(cpu.b)
+}
+
+func (cpu *GameboyCPU) incDE() {
+	cpu.incDE_helper()
+
+	cpu.lastInstructionClock.t = 8
+	cpu.pc += 1
+}
+
+func (cpu *GameboyCPU) incHL() {
+	cpu.incHL_helper()
+
+	cpu.lastInstructionClock.t = 8
+	cpu.pc += 1
+}
+
 func (cpu *GameboyCPU) incC() {
 	previousVal := cpu.c
 	newVal := cpu.c + 1
@@ -401,6 +455,30 @@ func (cpu *GameboyCPU) ldAParDEPar() {
 
 
 // Helpers
+func (cpu *GameboyCPU) decN(register byte) byte {
+	// Helpers for the 8-bit DEC instructions
+	previousVal := register
+	newVal := register - 1
+
+	if newVal == 0 {
+		cpu.setZeroFlag()
+	}
+
+	cpu.setSubstractFlag()
+
+	// Set H if no borrow from bit 4 !! UNTESTED !!
+	if (newVal^0x01^previousVal)&0x10 == 0x10 {
+		cpu.setHalfCarryFlag()
+	} else {
+		cpu.clearHalfCarryFlag()
+	}
+
+	cpu.lastInstructionClock.t = 4
+	cpu.pc += 1
+
+	return newVal
+}
+
 
 func (cpu *GameboyCPU) rlN(register byte) byte {
 	// Helper for the various "rotate left through carry (8-bit)" instructions
@@ -475,6 +553,10 @@ func (cpu *GameboyCPU) clearSubstractFlag() {
 	cpu.f = clearBit(cpu.f, 6)
 }
 
+func (cpu *GameboyCPU) setSubstractFlag() {
+	cpu.f = setBit(cpu.f, 6)
+}
+
 func (cpu *GameboyCPU) setHalfCarryFlag() {
 	cpu.f = setBit(cpu.f, 5)
 }
@@ -513,6 +595,18 @@ func (cpu *GameboyCPU) setHL(w types.Word) {
 }
 
 func (cpu *GameboyCPU) setDE(w types.Word) {
+	cpu.d, cpu.e = w.ToBytes()
+}
+
+func (cpu *GameboyCPU) incHL_helper() { // Helper prefix to distinguish from instruction.
+	w := cpu.getHL()
+	w = w + 1
+	cpu.h, cpu.l = w.ToBytes()
+}
+
+func (cpu *GameboyCPU) incDE_helper() {
+	w := cpu.getDE()
+	w = w + 1
 	cpu.d, cpu.e = w.ToBytes()
 }
 

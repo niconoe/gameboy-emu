@@ -7,6 +7,9 @@ import (
 	"os"
 )
 
+const zRamBaseAddress types.MemoryAddress = 0xff80
+const zRamEndAddress  types.MemoryAddress = 0xfffe
+
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -36,6 +39,8 @@ type Mmu struct {
 	romBank0     [16384]byte
 	otherRomBank [16384]byte
 
+	zRam		 [127]byte  // Zero-page AKA Quick RAM AKA High RAM area
+
 	biosIsMapped bool
 }
 
@@ -63,6 +68,13 @@ func (mmu Mmu) ReadByte(addr types.MemoryAddress) byte {
 			return mmu.romBank0[addr]
 		}
 	}
+
+	if isZRam(addr) { // zRam
+		// Not sure if that access is correct. Works good from popWordFromStack
+		// We have to make sure it also works well from direct access
+		return mmu.zRam[addr - zRamBaseAddress + 1]
+	}
+
 	return 0x00
 }
 
@@ -73,7 +85,7 @@ func (mmu Mmu) ReadWord(addr types.MemoryAddress) types.Word {
 	return types.WordFromBytes(b1, b2)
 }
 
-func (Mmu) WriteByte(addr types.MemoryAddress, val byte) {
+func (mmu *Mmu) WriteByte(addr types.MemoryAddress, val byte) {
 	fmt.Printf("Write byte %.2x to Address: %x", val, addr)
 
 	if addr >= 0x8000 && addr <= 0x9fff {
@@ -83,8 +95,20 @@ func (Mmu) WriteByte(addr types.MemoryAddress, val byte) {
 	if addr >= 0xff00 && addr <= 0xff7f {
 		fmt.Printf(" (It's Memory-mapped IO!) \n")
 	}
+
+	if isZRam(addr) {
+		mmu.zRam[addr - zRamBaseAddress] = val
+	}
 }
 
-func (Mmu) WriteWord(addr types.MemoryAddress, val types.Word) {
-
+func (mmu *Mmu) WriteWord(addr types.MemoryAddress, val types.Word) {
+	b1, b2 := val.ToBytes()
+	mmu.WriteByte(addr, b1)
+	mmu.WriteByte(addr - 1, b2)
 }
+
+// Helpers
+func isZRam(addr types.MemoryAddress) bool {
+	return addr >= zRamBaseAddress && addr <= zRamEndAddress;
+}
+
