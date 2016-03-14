@@ -97,6 +97,7 @@ func (mmu *Mmu) WriteByte(addr types.MemoryAddress, val byte) {
 	}
 
 	if isZRam(addr) {
+		fmt.Printf(" (It's zRAM!) \n")
 		mmu.zRam[addr - zRamBaseAddress] = val
 	}
 }

@@ -154,6 +154,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.LDHPara8ParA()
 	case 0xe2:
 		cpu.ldParCParA()
+	case 0xfe:
+		cpu.cpd8()
 
 	default:
 		panic(fmt.Sprintf("Opcode not found: %.2x. CPU state: %s", opcode, cpu))
@@ -175,6 +177,34 @@ func (cpu *GameboyCPU) dispatchExtended(secondByteOfOpcode byte) {
 }
 
 // Instructions
+func (cpu *GameboyCPU) cpd8(){
+	n := cpu.mmu.ReadByte(cpu.pc + 1)
+	tmp := cpu.a - n
+
+	if tmp == 0 {
+		cpu.setZeroFlag()
+	} else {
+		cpu.clearZeroFlag()
+	}
+
+	cpu.setSubstractFlag()
+
+	if cpu.a < n {
+		cpu.setCarryFlag()
+	} else {
+		cpu.clearCarryFlag()
+	}
+
+	if (int(cpu.a) & 0xF) < (int(n) & 0xF) {
+		cpu.setHalfCarryFlag()
+	} else {
+		cpu.clearHalfCarryFlag()
+	}
+
+	cpu.lastInstructionClock.t = 8
+ 	cpu.pc += 2
+}
+
 func (cpu *GameboyCPU) ldAE() {
 	cpu.a = cpu.e
 
@@ -221,7 +251,6 @@ func (cpu *GameboyCPU) ret() {
 	cpu.pc = types.MemoryAddress(cpu.popWordFromStack())
 
 	cpu.lastInstructionClock.t = 8
-	_ = "breakpoint"
 }
 
 // Each instruction manipulates PC appropriately
@@ -462,6 +491,8 @@ func (cpu *GameboyCPU) decN(register byte) byte {
 
 	if newVal == 0 {
 		cpu.setZeroFlag()
+	} else {
+		cpu.clearZeroFlag()
 	}
 
 	cpu.setSubstractFlag()
