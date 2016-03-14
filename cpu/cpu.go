@@ -110,6 +110,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.ldBd8()
 	case 0x0c:
 		cpu.incC()
+	case 0x0d:
+		cpu.decC()
 	case 0x0e:
 		cpu.ldCd8()
 	case 0x11:
@@ -120,6 +122,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.rlA()
 	case 0x1a:
 		cpu.ldAParDEPar()
+	case 0x18:
+		cpu.jrR8()
 	case 0x20:
 		cpu.jrNzR8()
 	case 0x22:
@@ -128,10 +132,16 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.incHL()
 	case 0x21:
 		cpu.ldHLd16()
+	case 0x28:
+		cpu.jrzR8()
+	case 0x2e:
+		cpu.ldLd8()
 	case 0x31:
 		cpu.ldSPd16()
 	case 0x32:
 		cpu.LDParHL_ParA()
+	case 0x3d:
+		cpu.decA()
 	case 0x3e:
 		cpu.ldAd8()
 	case 0x4f:
@@ -154,6 +164,8 @@ func (cpu *GameboyCPU) dispatch(opcode byte) {
 		cpu.LDHPara8ParA()
 	case 0xe2:
 		cpu.ldParCParA()
+	case 0xea:
+		cpu.ldPara16Par()
 	case 0xfe:
 		cpu.cpd8()
 
@@ -177,6 +189,17 @@ func (cpu *GameboyCPU) dispatchExtended(secondByteOfOpcode byte) {
 }
 
 // Instructions
+func (cpu *GameboyCPU) ldPara16Par() {
+	AddressLsb := cpu.mmu.ReadByte(cpu.pc + 1)
+	AddressMsb := cpu.mmu.ReadByte(cpu.pc + 2)
+
+	address := types.MakeMemoryAddress(AddressLsb, AddressMsb)
+	cpu.mmu.WriteByte(address, cpu.a)
+
+	cpu.lastInstructionClock.t = 16
+ 	cpu.pc += 3
+}
+
 func (cpu *GameboyCPU) cpd8(){
 	n := cpu.mmu.ReadByte(cpu.pc + 1)
 	tmp := cpu.a - n
@@ -369,6 +392,25 @@ func (cpu *GameboyCPU) bit7H() {
 	cpu.pc += 2
 }
 
+func (cpu *GameboyCPU) jrR8(){
+	cpu.pc += 2
+
+	cpu.pc = cpu.pc.AddSignedOffset(cpu.mmu.ReadByte(cpu.pc - 1))
+	cpu.lastInstructionClock.t = 12
+}
+
+func (cpu *GameboyCPU) jrzR8() {
+	cpu.pc += 2
+
+	if cpu.hasZeroFlag() {
+		cpu.pc = cpu.pc.AddSignedOffset(cpu.mmu.ReadByte(cpu.pc - 1))
+
+		cpu.lastInstructionClock.t = 12
+	} else {
+		cpu.lastInstructionClock.t = 8
+	}
+}
+
 func (cpu *GameboyCPU) jrNzR8() {
 	cpu.pc += 2 // We advance it before jump, since it is relative to the next instruction
 
@@ -405,6 +447,14 @@ func (cpu *GameboyCPU) ldAd8() {
 	cpu.pc += 2
 }
 
+func (cpu *GameboyCPU) ldLd8() {
+	cpu.l = cpu.mmu.ReadByte(cpu.pc + 1)
+
+	cpu.lastInstructionClock.t = 8
+
+	cpu.pc += 2
+}
+
 func (cpu *GameboyCPU) ldParCParA() {
 	// Put A into address $FF00 + register C.
 	// Also known as LD (C),A and LD ($FF00+C),A
@@ -429,8 +479,16 @@ func (cpu *GameboyCPU) LDHPara8ParA() {
 	cpu.pc += 2
 }
 
+func (cpu *GameboyCPU) decA() {
+	cpu.a = cpu.decN(cpu.a)
+}
+
 func (cpu *GameboyCPU) decB() {
 	cpu.b = cpu.decN(cpu.b)
+}
+
+func (cpu *GameboyCPU) decC() {
+	cpu.c = cpu.decN(cpu.c)
 }
 
 func (cpu *GameboyCPU) incDE() {

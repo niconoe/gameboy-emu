@@ -14,6 +14,10 @@ func MakeMemoryMappedIOAddress() MemoryAddress {
 	return a
 }
 
+func MakeMemoryAddress(lsb, msb byte) MemoryAddress {
+	return MemoryAddress(WordFromBytes(lsb, msb))
+}
+
 func (m MemoryAddress) AddSignedOffset(offset byte) MemoryAddress {
 	// Returns a new address with offset added
 	// Since offset is a signed 8-bit integer, the new adress is in the range
